@@ -1,0 +1,1053 @@
+import { useState, useEffect, useRef, useCallback } from "react";
+
+// ── Paleta & tipografía ───────────────────────────────────────────────────────
+const FONTS = `
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=IBM+Plex+Mono:wght@300;400;500&family=Playfair+Display:wght@700;900&display=swap');
+`;
+
+const CSS = `
+  :root {
+    --bg:       #060a0f;
+    --bg2:      #0b1018;
+    --bg3:      #111820;
+    --border:   #1e2d3d;
+    --amber:    #d4933a;
+    --amber2:   #f0b95a;
+    --red:      #c0392b;
+    --green:    #2ecc71;
+    --blue:     #2980b9;
+    --muted:    #4a6070;
+    --text:     #cdd8e0;
+    --textdim:  #6b8499;
+    --mono:     'IBM Plex Mono', monospace;
+    --display:  'Playfair Display', serif;
+    --ui:       'Rajdhani', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--ui); }
+
+  /* scanline overlay */
+  body::before {
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:9999;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.07) 2px, rgba(0,0,0,.07) 4px);
+  }
+
+  .app { min-height:100vh; display:flex; flex-direction:column; }
+
+  /* ── HEADER ── */
+  .header {
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(90deg, var(--bg) 0%, #0d1621 100%);
+    padding: 0 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 64px; position: sticky; top:0; z-index:100;
+  }
+  .logo { display:flex; align-items:center; gap:12px; }
+  .logo-icon {
+    width:36px; height:36px; border:2px solid var(--amber);
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--display); font-size:18px; color:var(--amber);
+    animation: pulse-border 3s ease-in-out infinite;
+  }
+  @keyframes pulse-border {
+    0%,100% { box-shadow: 0 0 4px var(--amber); }
+    50%      { box-shadow: 0 0 16px var(--amber), 0 0 32px rgba(212,147,58,.3); }
+  }
+  .logo-text { font-family:var(--display); font-size:20px; color:#fff; letter-spacing:.5px; }
+  .logo-sub  { font-family:var(--mono); font-size:10px; color:var(--amber); letter-spacing:3px; text-transform:uppercase; }
+
+  .header-right { display:flex; align-items:center; gap:20px; }
+  .clock { font-family:var(--mono); font-size:13px; color:var(--textdim); }
+  .live-badge {
+    display:flex; align-items:center; gap:6px;
+    font-family:var(--mono); font-size:11px; color:var(--green);
+    border:1px solid var(--green); padding:3px 10px; letter-spacing:2px;
+  }
+  .live-dot {
+    width:6px; height:6px; border-radius:50%; background:var(--green);
+    animation: blink 1.2s step-start infinite;
+  }
+  @keyframes blink { 50%{opacity:0;} }
+
+  /* ── CLIMATE BAR ── */
+  .climate-bar {
+    background: var(--bg2); border-bottom:1px solid var(--border);
+    padding: 8px 24px; display:flex; align-items:center; gap:24px; overflow:hidden;
+  }
+  .climate-label { font-family:var(--mono); font-size:10px; color:var(--amber); letter-spacing:3px; white-space:nowrap; }
+  .climate-track { flex:1; height:6px; background:var(--bg3); border:1px solid var(--border); position:relative; }
+  .climate-fill {
+    height:100%; transition: width 1.5s cubic-bezier(.4,0,.2,1), background 1.5s;
+    position:relative;
+  }
+  .climate-fill::after {
+    content:''; position:absolute; right:0; top:-3px;
+    width:12px; height:12px; border-radius:50%;
+    background: inherit; box-shadow: 0 0 8px currentColor;
+  }
+  .climate-val { font-family:var(--mono); font-size:14px; font-weight:500; white-space:nowrap; }
+  .sector-pills { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill {
+    font-family:var(--mono); font-size:10px; padding:2px 8px;
+    border:1px solid; letter-spacing:1px;
+    transition: all .3s;
+  }
+
+  /* ── MAIN GRID ── */
+  .main { flex:1; display:grid; grid-template-columns: 280px 1fr 320px; gap:0; }
+
+  /* ── SIDEBAR LEFT ── */
+  .sidebar {
+    border-right:1px solid var(--border); background:var(--bg2);
+    display:flex; flex-direction:column; height: calc(100vh - 64px - 42px);
+    position: sticky; top: calc(64px + 42px); overflow-y:auto;
+  }
+  .sidebar::-webkit-scrollbar { width:4px; }
+  .sidebar::-webkit-scrollbar-track { background:var(--bg); }
+  .sidebar::-webkit-scrollbar-thumb { background:var(--border); }
+
+  .sidebar-section { padding:16px; border-bottom:1px solid var(--border); }
+  .section-title {
+    font-family:var(--mono); font-size:10px; color:var(--amber);
+    letter-spacing:3px; text-transform:uppercase; margin-bottom:12px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .section-title::before { content:''; flex:1; height:1px; background: linear-gradient(90deg, var(--amber) 0%, transparent 100%); }
+
+  .inst-btn {
+    width:100%; text-align:left; padding:8px 10px;
+    background:transparent; border:none; border-left:2px solid transparent;
+    color:var(--textdim); font-family:var(--ui); font-size:13px; cursor:pointer;
+    transition:all .2s; margin-bottom:2px; display:flex; align-items:center; gap:8px;
+  }
+  .inst-btn:hover { color:var(--text); border-color:var(--amber); background:rgba(212,147,58,.05); }
+  .inst-btn.active { color:var(--amber); border-color:var(--amber); background:rgba(212,147,58,.08); }
+  .inst-count {
+    margin-left:auto; font-family:var(--mono); font-size:11px;
+    color:var(--muted); background:var(--bg3); padding:1px 6px;
+  }
+
+  /* ── CENTER PANEL ── */
+  .center { display:flex; flex-direction:column; background:var(--bg); }
+
+  .tabs {
+    display:flex; border-bottom:1px solid var(--border);
+    background:var(--bg2); position:sticky; top: calc(64px + 42px); z-index:50;
+  }
+  .tab {
+    padding:12px 20px; font-family:var(--ui); font-size:14px; font-weight:600;
+    color:var(--textdim); border:none; background:transparent; cursor:pointer;
+    border-bottom:2px solid transparent; transition:all .2s; letter-spacing:.5px;
+  }
+  .tab:hover { color:var(--text); }
+  .tab.active { color:var(--amber); border-bottom-color:var(--amber); background:rgba(212,147,58,.04); }
+
+  .content-area { flex:1; overflow-y:auto; padding:20px; }
+  .content-area::-webkit-scrollbar { width:4px; }
+  .content-area::-webkit-scrollbar-thumb { background:var(--border); }
+
+  /* ── NEWS CARDS ── */
+  .news-grid { display:flex; flex-direction:column; gap:12px; }
+  .news-card {
+    background:var(--bg2); border:1px solid var(--border);
+    padding:16px; cursor:pointer; transition:all .25s;
+    position:relative; overflow:hidden;
+  }
+  .news-card::before {
+    content:''; position:absolute; left:0; top:0; bottom:0;
+    width:3px; background:var(--amber); transform:scaleY(0);
+    transition: transform .25s; transform-origin: bottom;
+  }
+  .news-card:hover { border-color:var(--amber); background:var(--bg3); }
+  .news-card:hover::before { transform:scaleY(1); }
+  .news-card.high-alert { border-color:rgba(192,57,43,.4); }
+  .news-card.high-alert::before { background:var(--red); transform:scaleY(1); }
+
+  .news-meta { display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap; }
+  .tag {
+    font-family:var(--mono); font-size:10px; padding:2px 7px; letter-spacing:1px;
+    border:1px solid;
+  }
+  .tag-ejecutivo  { color:#e67e22; border-color:#e67e22; background:rgba(230,126,34,.08); }
+  .tag-legislativo{ color:#3498db; border-color:#3498db; background:rgba(52,152,219,.08); }
+  .tag-judicial   { color:#9b59b6; border-color:#9b59b6; background:rgba(155,89,182,.08); }
+  .tag-electoral  { color:#1abc9c; border-color:#1abc9c; background:rgba(26,188,156,.08); }
+  .tag-ministerio { color:#f39c12; border-color:#f39c12; background:rgba(243,156,18,.08); }
+  .tag-decreto    { color:var(--red); border-color:var(--red); background:rgba(192,57,43,.08); }
+  .tag-ley        { color:#2ecc71; border-color:#2ecc71; background:rgba(46,204,113,.08); }
+  .tag-gobernacion{ color:#16a085; border-color:#16a085; background:rgba(22,160,133,.08); }
+  .tag-alcaldia   { color:#27ae60; border-color:#27ae60; background:rgba(39,174,96,.08); }
+
+  .news-time { font-family:var(--mono); font-size:11px; color:var(--muted); margin-left:auto; }
+  .news-title { font-size:15px; font-weight:600; color:var(--text); line-height:1.4; margin-bottom:8px; }
+  .news-summary { font-size:13px; color:var(--textdim); line-height:1.6; }
+  .news-footer { display:flex; gap:12px; margin-top:10px; align-items:center; }
+  .tension-bar-wrap { display:flex; align-items:center; gap:8px; flex:1; }
+  .tension-label { font-family:var(--mono); font-size:10px; color:var(--muted); white-space:nowrap; }
+  .tension-bar { flex:1; height:4px; background:var(--bg3); }
+  .tension-fill { height:100%; transition:width .6s; }
+  .ai-badge {
+    font-family:var(--mono); font-size:10px; color:var(--amber);
+    border:1px solid rgba(212,147,58,.3); padding:2px 8px; letter-spacing:1px;
+  }
+
+  /* ── AI ANALYSIS PANEL ── */
+  .ai-panel {
+    background:var(--bg3); border:1px solid var(--border); padding:16px; margin-bottom:16px;
+    position:relative;
+  }
+  .ai-panel-header {
+    display:flex; align-items:center; gap:10px; margin-bottom:14px;
+    font-family:var(--mono); font-size:11px; color:var(--amber); letter-spacing:2px;
+  }
+  .ai-spinner {
+    width:14px; height:14px; border:2px solid rgba(212,147,58,.2);
+    border-top-color:var(--amber); border-radius:50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to{transform:rotate(360deg);} }
+  .ai-text { font-size:13px; color:var(--text); line-height:1.8; white-space:pre-wrap; }
+  .ai-cursor {
+    display:inline-block; width:8px; height:14px;
+    background:var(--amber); vertical-align:text-bottom;
+    animation:blink .7s step-start infinite;
+  }
+
+  /* ── FORECAST PANEL ── */
+  .forecast-container { display:flex; flex-direction:column; gap:16px; }
+  .forecast-card {
+    background:var(--bg2); border:1px solid var(--border); padding:16px;
+    position:relative;
+  }
+  .forecast-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+  .forecast-title { font-family:var(--display); font-size:16px; color:var(--amber2); }
+  .prob-badge {
+    font-family:var(--mono); font-size:13px; font-weight:500;
+    padding:4px 12px; border:1px solid;
+  }
+  .forecast-body { font-size:13px; color:var(--textdim); line-height:1.7; margin-bottom:12px; }
+  .forecast-tags { display:flex; gap:8px; flex-wrap:wrap; }
+  .ftag {
+    font-family:var(--mono); font-size:10px; padding:2px 8px;
+    background:var(--bg3); color:var(--muted); border:1px solid var(--border);
+  }
+  .timeline-indicator {
+    display:flex; align-items:center; gap:8px; margin-top:10px;
+    font-family:var(--mono); font-size:11px; color:var(--muted);
+  }
+  .tl-dot { width:8px; height:8px; border-radius:50%; }
+
+  /* ── RIGHT PANEL ── */
+  .right-panel {
+    border-left:1px solid var(--border); background:var(--bg2);
+    display:flex; flex-direction:column; height: calc(100vh - 64px - 42px);
+    position: sticky; top: calc(64px + 42px); overflow-y:auto;
+  }
+  .right-panel::-webkit-scrollbar { width:4px; }
+  .right-panel::-webkit-scrollbar-thumb { background:var(--border); }
+
+  .rp-section { padding:16px; border-bottom:1px solid var(--border); }
+
+  /* termómetro político */
+  .thermometer { display:flex; flex-direction:column; align-items:center; gap:8px; padding:8px 0; }
+  .thermo-track {
+    width:24px; height:160px; background:var(--bg3);
+    border:1px solid var(--border); border-radius:12px;
+    position:relative; overflow:hidden;
+  }
+  .thermo-fill {
+    position:absolute; bottom:0; left:0; right:0;
+    transition: height 1.5s cubic-bezier(.4,0,.2,1), background 1.5s;
+    border-radius:12px 12px 0 0;
+  }
+  .thermo-labels {
+    position:absolute; right:32px; top:0; height:100%;
+    display:flex; flex-direction:column; justify-content:space-between;
+    font-family:var(--mono); font-size:10px; color:var(--muted);
+  }
+  .thermo-wrap { position:relative; display:flex; align-items:center; }
+  .thermo-reading {
+    font-family:var(--display); font-size:32px; font-weight:900;
+    line-height:1;
+  }
+  .thermo-sublabel { font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:2px; text-transform:uppercase; }
+
+  /* sector tensions */
+  .sector-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .sector-name { font-size:12px; color:var(--textdim); width:90px; flex-shrink:0; font-family:var(--ui); }
+  .sector-track { flex:1; height:6px; background:var(--bg3); border:1px solid var(--border); }
+  .sector-fill { height:100%; transition:width 1s; }
+  .sector-pct { font-family:var(--mono); font-size:11px; color:var(--muted); width:30px; text-align:right; }
+
+  /* alert ticker */
+  .ticker {
+    background:var(--bg); border-top:1px solid var(--border);
+    padding:6px 24px; overflow:hidden; white-space:nowrap;
+  }
+  .ticker-inner {
+    display:inline-block;
+    animation: ticker-scroll 40s linear infinite;
+    font-family:var(--mono); font-size:11px; color:var(--textdim);
+  }
+  @keyframes ticker-scroll {
+    from { transform:translateX(100vw); }
+    to   { transform:translateX(-100%); }
+  }
+  .ticker-item { margin-right:80px; }
+  .ticker-item span { color:var(--amber); margin-right:8px; }
+
+  /* loading */
+  .loading {
+    display:flex; align-items:center; justify-content:center;
+    gap:12px; padding:40px; color:var(--muted);
+    font-family:var(--mono); font-size:13px;
+  }
+
+  /* decreto modal */
+  .modal-overlay {
+    position:fixed; inset:0; background:rgba(0,0,0,.8); z-index:200;
+    display:flex; align-items:center; justify-content:center; padding:24px;
+  }
+  .modal {
+    background:var(--bg2); border:1px solid var(--border);
+    max-width:700px; width:100%; max-height:80vh; overflow-y:auto;
+    padding:24px;
+  }
+  .modal-title { font-family:var(--display); font-size:22px; color:var(--amber2); margin-bottom:16px; }
+  .modal-close {
+    float:right; background:none; border:1px solid var(--border);
+    color:var(--text); padding:4px 12px; cursor:pointer; font-family:var(--mono);
+  }
+
+  /* normas table */
+  .normas-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .normas-table th {
+    font-family:var(--mono); font-size:10px; color:var(--amber);
+    letter-spacing:2px; text-align:left; padding:8px 10px;
+    border-bottom:1px solid var(--border); background:var(--bg3);
+  }
+  .normas-table td {
+    padding:10px; border-bottom:1px solid var(--border); color:var(--textdim);
+    vertical-align:top;
+  }
+  .normas-table tr:hover td { background:rgba(212,147,58,.04); color:var(--text); }
+
+  .btn-analyze {
+    background:none; border:1px solid var(--amber); color:var(--amber);
+    padding:8px 20px; font-family:var(--ui); font-size:14px; font-weight:600;
+    cursor:pointer; letter-spacing:1px; transition:all .2s;
+    display:flex; align-items:center; gap:8px;
+  }
+  .btn-analyze:hover { background:rgba(212,147,58,.1); box-shadow:0 0 12px rgba(212,147,58,.2); }
+  .btn-analyze:disabled { opacity:.5; cursor:not-allowed; }
+
+  @media (max-width:1100px) {
+    .main { grid-template-columns: 220px 1fr; }
+    .right-panel { display:none; }
+  }
+  @media (max-width:768px) {
+    .main { grid-template-columns: 1fr; }
+    .sidebar { display:none; }
+  }
+`;
+
+// ── Datos simulados de Bolivia ─────────────────────────────────────────────────
+const INSTITUTIONS = [
+  { id:"ejecutivo",   label:"Órgano Ejecutivo",   icon:"⚡", count:14 },
+  { id:"legislativo", label:"Asamblea Legislativa",icon:"📜", count:8  },
+  { id:"judicial",    label:"Tribunal Supremo",    icon:"⚖️", count:5  },
+  { id:"electoral",   label:"Tribunal Electoral",  icon:"🗳️", count:3  },
+  { id:"ministerios", label:"Ministerios",          icon:"🏛️", count:22 },
+  { id:"gobernacion", label:"Gobernaciones",        icon:"🗺️", count:9  },
+  { id:"alcaldia",    label:"Alcaldías",            icon:"🏙️", count:11 },
+];
+
+const SECTOR_TENSIONS = [
+  { name:"COB",        base:72, color:"#e74c3c" },
+  { name:"CSUTCB",     base:58, color:"#e67e22" },
+  { name:"Interculturales", base:45, color:"#f39c12" },
+  { name:"Cívicos",    base:81, color:"#c0392b" },
+  { name:"Transportistas", base:63, color:"#e67e22" },
+  { name:"Médicos",    base:39, color:"#27ae60" },
+  { name:"Mineros",    base:55, color:"#e67e22" },
+  { name:"Empresarios",base:35, color:"#3498db" },
+];
+
+const TICKER_ITEMS = [
+  "ALERTA: Decreto 4953 podría activar movilizaciones de la COB",
+  "Asamblea Legislativa sesión extraordinaria convocada para el 12 de marzo",
+  "Gobernación de Santa Cruz en conflicto con Ejecutivo por competencias",
+  "Tribunal Electoral confirma cronograma electoral 2025",
+  "Ministerio de Economía anuncia medidas cambiarias — sector empresarial en alerta",
+  "CSUTCB amenaza con bloqueo de carreteras si no hay respuesta en 72 horas",
+  "Decreto Supremo 5012 publicado en Gaceta Oficial — análisis en curso",
+];
+
+const SAMPLE_NEWS = [
+  {
+    id:1, type:"decreto", institution:"ejecutivo",
+    title:"Decreto Supremo N° 5018: Regulación de exportaciones de quinua y soya",
+    summary:"El Ejecutivo promulga decreto que modifica el régimen de exportaciones agrícolas, generando reacción inmediata del sector empresarial cruceño y organizaciones de productores del altiplano.",
+    time:"hace 35 min", tensionLevel:78, alert:true,
+    tags:["decreto","ejecutivo","ministerio"]
+  },
+  {
+    id:2, type:"ley", institution:"legislativo",
+    title:"Proyecto de Ley 187/2026: Modificación al Código de Minería",
+    summary:"La Asamblea Legislativa aprueba en primera instancia modificaciones al Código Minero que afectan concesiones en Potosí y Oruro. Cooperativistas mineros anuncian posición.",
+    time:"hace 1h", tensionLevel:65, alert:false,
+    tags:["ley","legislativo"]
+  },
+  {
+    id:3, type:"judicial", institution:"judicial",
+    title:"TCP falla en caso de competencias Estado – Gobernación Santa Cruz",
+    summary:"El Tribunal Constitucional Plurinacional emite sentencia que restringe autonomía departamental en materia de tierras. El Comité Cívico Pro Santa Cruz anuncia cabildo de urgencia.",
+    time:"hace 2h", tensionLevel:89, alert:true,
+    tags:["judicial","gobernacion"]
+  },
+  {
+    id:4, type:"electoral", institution:"electoral",
+    title:"TSE publica cronograma oficial de elecciones judiciales 2025",
+    summary:"El Tribunal Supremo Electoral confirma fechas para elecciones judiciales. Organizaciones sociales afines al MAS y la oposición difieren sobre la legitimidad del proceso.",
+    time:"hace 3h", tensionLevel:52, alert:false,
+    tags:["electoral"]
+  },
+  {
+    id:5, type:"ministerio", institution:"ministerios",
+    title:"Ministerio de Economía: Nuevas medidas para estabilizar el tipo de cambio",
+    summary:"El Ministerio de Economía anuncia paquete de medidas ante la escasez de divisas. Cámara de Comercio e industrias importadoras expresan preocupación. BCB en sesión extraordinaria.",
+    time:"hace 4h", tensionLevel:82, alert:true,
+    tags:["ministerio","ejecutivo"]
+  },
+  {
+    id:6, type:"alcaldia", institution:"alcaldia",
+    title:"Alcaldía de El Alto suspende licencias de construcción — conflicto con juntas vecinales",
+    summary:"La Alcaldía alteña suspende permisos de construcción en zonas de expansión urbana, generando movilización de juntas vecinales y organizaciones de base del sector.",
+    time:"hace 5h", tensionLevel:44, alert:false,
+    tags:["alcaldia"]
+  },
+];
+
+const NORMAS = [
+  { num:"DS 5018", tipo:"Decreto Supremo", fecha:"08/03/2026", organo:"Ejecutivo", tema:"Exportaciones agrícolas", estado:"Vigente" },
+  { num:"DS 5017", tipo:"Decreto Supremo", fecha:"05/03/2026", organo:"Ejecutivo", tema:"Régimen pensional", estado:"Vigente" },
+  { num:"Ley 1537", tipo:"Ley",            fecha:"01/03/2026", organo:"Legislativo",tema:"Presupuesto GT 2026", estado:"Promulgada" },
+  { num:"Ley 1536", tipo:"Ley",            fecha:"20/02/2026", organo:"Legislativo",tema:"Código Procesal",    estado:"Promulgada" },
+  { num:"Res. TSE 42",tipo:"Resolución",   fecha:"07/03/2026", organo:"Electoral",  tema:"Cronograma elec.",   estado:"Vigente" },
+  { num:"Sent. TCP 08",tipo:"Sentencia",   fecha:"06/03/2026", organo:"Judicial",   tema:"Autonomías depart.", estado:"Ejecutoriada" },
+];
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function getTensionColor(v) {
+  if (v >= 80) return "#c0392b";
+  if (v >= 60) return "#e67e22";
+  if (v >= 40) return "#f39c12";
+  return "#27ae60";
+}
+function getClimateLabel(v) {
+  if (v >= 85) return { label:"CRISIS", color:"#c0392b" };
+  if (v >= 70) return { label:"TENSO",  color:"#e67e22" };
+  if (v >= 50) return { label:"AGITADO",color:"#f39c12" };
+  if (v >= 30) return { label:"ESTABLE",color:"#2ecc71" };
+  return { label:"CALMO",   color:"#27ae60" };
+}
+
+// ── COMPONENTE PRINCIPAL ───────────────────────────────────────────────────────
+export default function BoliviaPolitica() {
+  const [tab, setTab] = useState("noticias");
+  const [activeInst, setActiveInst] = useState("all");
+  const [climateScore, setClimateScore] = useState(73);
+  const [sectors, setSectors] = useState(SECTOR_TENSIONS.map(s => ({ ...s, val: s.base })));
+  const [selectedNews, setSelectedNews] = useState(null);
+  const [analysisText, setAnalysisText] = useState("");
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [forecasts, setForecasts] = useState([]);
+  const [forecastLoading, setForecastLoading] = useState(false);
+  const [nowTime, setNowTime] = useState("");
+  const analysisDoneRef = useRef(false);
+
+  // Reloj
+  useEffect(() => {
+    const tick = () => {
+      const d = new Date();
+      setNowTime(d.toLocaleTimeString("es-BO", { hour12:false }) + " BOT");
+    };
+    tick(); const iv = setInterval(tick, 1000); return () => clearInterval(iv);
+  }, []);
+
+  // Fluctuación de tensión
+  useEffect(() => {
+    const iv = setInterval(() => {
+      setSectors(prev => prev.map(s => ({
+        ...s,
+        val: Math.max(5, Math.min(99, s.val + (Math.random() - .48) * 4))
+      })));
+      setClimateScore(prev => Math.max(10, Math.min(98, prev + (Math.random() - .47) * 2)));
+    }, 3000);
+    return () => clearInterval(iv);
+  }, []);
+
+  // ── Llamada a Claude API ──
+  const runAnalysis = useCallback(async (newsItem) => {
+    setAnalysisText("");
+    setAnalysisLoading(true);
+    analysisDoneRef.current = false;
+
+    const prompt = `Eres un analista político especializado en Bolivia con 20 años de experiencia. Analiza esta noticia y proporciona:
+
+1. CONTEXTO HISTÓRICO: ¿Cómo reaccionaron históricamente los sectores bolivianos ante situaciones similares?
+2. ACTORES EN TENSIÓN: ¿Qué organizaciones sociales, gremios o sectores se verán movilizados?
+3. ESCENARIO PROBABLE (próximas 72 horas): ¿Qué acciones concretas es probable que ocurran?
+4. NIVEL DE RIESGO POLÍTICO: Bajo/Medio/Alto/Crítico y por qué.
+5. PRECEDENTES: Cita 1-2 eventos históricos bolivianos similares y su desenlace.
+
+Noticia: "${newsItem.title}"
+Resumen: "${newsItem.summary}"
+Institución: ${newsItem.institution}
+Tensión actual: ${newsItem.tensionLevel}/100
+
+Sé específico sobre Bolivia, sus organizaciones (COB, CSUTCB, comités cívicos, etc.) y su dinámica política única. Responde en español, de forma directa y técnica.`;
+
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          stream: true,
+          messages: [{ role: "user", content: prompt }]
+        })
+      });
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6).trim();
+            if (data === "[DONE]") continue;
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.type === "content_block_delta" && parsed.delta?.text) {
+                setAnalysisText(prev => prev + parsed.delta.text);
+              }
+            } catch {}
+          }
+        }
+      }
+    } catch (e) {
+      setAnalysisText("Error de conexión con el motor de análisis. Verifique la red y reintente.");
+    }
+    setAnalysisLoading(false);
+    analysisDoneRef.current = true;
+  }, []);
+
+  const runForecast = useCallback(async () => {
+    setForecasts([]);
+    setForecastLoading(true);
+
+    const prompt = `Eres el principal analista de riesgo político de Bolivia. Basándote en el panorama actual boliviano de marzo 2026:
+
+- Tensión política general: ${Math.round(climateScore)}/100
+- Sectores más tensos: ${sectors.sort((a,b)=>b.val-a.val).slice(0,3).map(s=>s.name+"("+Math.round(s.val)+")").join(", ")}
+- Noticias recientes incluyen: decretos sobre exportaciones, conflicto autonomías Santa Cruz, medidas cambiarias.
+
+Genera un PRONÓSTICO POLÍTICO en formato JSON estricto (sin markdown, sin explicaciones fuera del JSON):
+{
+  "forecasts": [
+    {
+      "title": "título del escenario",
+      "probability": 85,
+      "timeframe": "24-72 horas",
+      "description": "descripción detallada del escenario probable basado en patrones históricos bolivianos",
+      "severity": "alto",
+      "triggers": ["trigger1", "trigger2"],
+      "historical_ref": "referencia a evento histórico similar en Bolivia"
+    }
+  ]
+}
+
+Genera exactamente 4 escenarios ordenados por probabilidad. Usa patrones históricos reales bolivianos (2000-2025). severity puede ser: bajo, medio, alto, critico.`;
+
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          messages: [{ role: "user", content: prompt }]
+        })
+      });
+      const data = await response.json();
+      const raw = data.content?.map(c => c.text || "").join("") || "";
+      const clean = raw.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(clean);
+      setForecasts(parsed.forecasts || []);
+    } catch {
+      setForecasts([{
+        title:"Error al generar pronóstico",
+        probability:0,
+        timeframe:"—",
+        description:"No se pudo contactar el motor de análisis. Reintente.",
+        severity:"bajo",
+        triggers:[],
+        historical_ref:""
+      }]);
+    }
+    setForecastLoading(false);
+  }, [climateScore, sectors]);
+
+  const climate = getClimateLabel(climateScore);
+  const filteredNews = activeInst === "all"
+    ? SAMPLE_NEWS
+    : SAMPLE_NEWS.filter(n => n.institution === activeInst || n.tags.includes(activeInst));
+
+  return (
+    <>
+      <style>{FONTS + CSS}</style>
+
+      <div className="app">
+        {/* ── HEADER ── */}
+        <header className="header">
+          <div className="logo">
+            <div className="logo-icon">Ω</div>
+            <div>
+              <div className="logo-text">OBSERVATORIO POLÍTICO · BOLIVIA</div>
+              <div className="logo-sub">Sistema de Inteligencia Normativa y Análisis Predictivo</div>
+            </div>
+          </div>
+          <div className="header-right">
+            <div className="clock">{nowTime}</div>
+            <div className="live-badge">
+              <div className="live-dot" />
+              MONITOREO ACTIVO
+            </div>
+          </div>
+        </header>
+
+        {/* ── CLIMATE BAR ── */}
+        <div className="climate-bar">
+          <div className="climate-label">CLIMA POLÍTICO</div>
+          <div className="climate-track">
+            <div className="climate-fill" style={{
+              width:`${climateScore}%`,
+              background:`linear-gradient(90deg, #27ae60, #f39c12, ${climate.color})`
+            }} />
+          </div>
+          <div className="climate-val" style={{color:climate.color}}>
+            {Math.round(climateScore)} — {climate.label}
+          </div>
+          <div className="sector-pills">
+            {["🔴 BLOQUEO","🟡 MARCHA","🟠 HUELGA"].map(p => (
+              <div key={p} className="pill" style={{
+                color:p.startsWith("🔴")?"#c0392b":p.startsWith("🟡")?"#f39c12":"#e67e22",
+                borderColor:"currentColor"
+              }}>{p}</div>
+            ))}
+          </div>
+        </div>
+
+        <div className="main">
+          {/* ── SIDEBAR ── */}
+          <aside className="sidebar">
+            <div className="sidebar-section">
+              <div className="section-title">Instituciones</div>
+              <button
+                className={`inst-btn ${activeInst==="all"?"active":""}`}
+                onClick={() => setActiveInst("all")}
+              >
+                <span>🔍</span> Todas las fuentes
+                <span className="inst-count">67</span>
+              </button>
+              {INSTITUTIONS.map(inst => (
+                <button key={inst.id}
+                  className={`inst-btn ${activeInst===inst.id?"active":""}`}
+                  onClick={() => setActiveInst(inst.id)}
+                >
+                  <span>{inst.icon}</span> {inst.label}
+                  <span className="inst-count">{inst.count}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="sidebar-section">
+              <div className="section-title">Tipo Normativa</div>
+              {["Decreto Supremo","Ley","Resolución","Sentencia TCP","Circular","Acuerdo"].map(t => (
+                <button key={t} className="inst-btn">
+                  <span>📄</span> {t}
+                </button>
+              ))}
+            </div>
+
+            <div className="sidebar-section">
+              <div className="section-title">Período</div>
+              {["Hoy","Últimas 48h","Esta semana","Este mes","Histórico"].map(p => (
+                <button key={p} className="inst-btn">
+                  <span>📅</span> {p}
+                </button>
+              ))}
+            </div>
+          </aside>
+
+          {/* ── CENTRO ── */}
+          <main className="center">
+            <div className="tabs">
+              {[
+                { id:"noticias",  label:"📡 Noticias & Análisis" },
+                { id:"normas",    label:"📜 Normativa Oficial" },
+                { id:"pronostico",label:"🔮 Pronóstico Político" },
+              ].map(t => (
+                <button key={t.id}
+                  className={`tab ${tab===t.id?"active":""}`}
+                  onClick={() => setTab(t.id)}
+                >{t.label}</button>
+              ))}
+            </div>
+
+            <div className="content-area">
+              {/* ── TAB NOTICIAS ── */}
+              {tab === "noticias" && (
+                <div className="news-grid">
+                  {selectedNews ? (
+                    <div>
+                      <button
+                        className="btn-analyze"
+                        onClick={() => setSelectedNews(null)}
+                        style={{marginBottom:16}}
+                      >
+                        ← Volver al listado
+                      </button>
+                      {/* Detalle noticia */}
+                      <div className="ai-panel">
+                        <div className="ai-panel-header">
+                          <span>📰</span> NOTICIA SELECCIONADA
+                        </div>
+                        <div className="news-title" style={{fontSize:17,marginBottom:12,color:"var(--amber2)"}}>
+                          {selectedNews.title}
+                        </div>
+                        <div className="news-summary" style={{marginBottom:12}}>{selectedNews.summary}</div>
+                        <div className="news-meta">
+                          {selectedNews.tags.map(t => (
+                            <span key={t} className={`tag tag-${t}`}>{t.toUpperCase()}</span>
+                          ))}
+                          <span className="news-time">{selectedNews.time}</span>
+                        </div>
+                      </div>
+
+                      <div className="ai-panel" style={{marginTop:16}}>
+                        <div className="ai-panel-header">
+                          {analysisLoading && <div className="ai-spinner" />}
+                          <span>🤖 ANÁLISIS DE INTELIGENCIA POLÍTICA</span>
+                          {!analysisLoading && !analysisText && (
+                            <button
+                              className="btn-analyze"
+                              style={{marginLeft:"auto",fontSize:12,padding:"4px 14px"}}
+                              onClick={() => runAnalysis(selectedNews)}
+                            >ANALIZAR</button>
+                          )}
+                        </div>
+                        {analysisText
+                          ? <div className="ai-text">{analysisText}{analysisLoading && <span className="ai-cursor" />}</div>
+                          : !analysisLoading && (
+                            <div style={{color:"var(--muted)",fontFamily:"var(--mono)",fontSize:12,padding:"8px 0"}}>
+                              Haga clic en ANALIZAR para que la IA examine esta noticia con el contexto histórico boliviano.
+                            </div>
+                          )
+                        }
+                      </div>
+                    </div>
+                  ) : (
+                    filteredNews.map(n => (
+                      <div key={n.id}
+                        className={`news-card ${n.alert?"high-alert":""}`}
+                        onClick={() => { setSelectedNews(n); setAnalysisText(""); }}
+                      >
+                        <div className="news-meta">
+                          {n.tags.map(t => (
+                            <span key={t} className={`tag tag-${t}`}>{t.toUpperCase()}</span>
+                          ))}
+                          <span className="news-time">{n.time}</span>
+                        </div>
+                        <div className="news-title">{n.title}</div>
+                        <div className="news-summary">{n.summary}</div>
+                        <div className="news-footer">
+                          <div className="tension-bar-wrap">
+                            <span className="tension-label">TENSIÓN SOCIAL</span>
+                            <div className="tension-bar">
+                              <div className="tension-fill" style={{
+                                width:`${n.tensionLevel}%`,
+                                background:getTensionColor(n.tensionLevel)
+                              }} />
+                            </div>
+                            <span style={{fontFamily:"var(--mono)",fontSize:11,color:getTensionColor(n.tensionLevel)}}>
+                              {n.tensionLevel}
+                            </span>
+                          </div>
+                          <span className="ai-badge">▸ ANALIZAR</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {/* ── TAB NORMAS ── */}
+              {tab === "normas" && (
+                <div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+                    <div style={{fontFamily:"var(--display)",fontSize:20,color:"var(--amber2)"}}>
+                      Registro Normativo Oficial
+                    </div>
+                    <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--muted)"}}>
+                      Gaceta Oficial · Actualizado: {nowTime}
+                    </div>
+                  </div>
+                  <table className="normas-table">
+                    <thead>
+                      <tr>
+                        <th>N° / CÓDIGO</th><th>TIPO</th><th>FECHA</th>
+                        <th>ÓRGANO</th><th>MATERIA</th><th>ESTADO</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {NORMAS.map((n,i) => (
+                        <tr key={i} style={{cursor:"pointer"}}>
+                          <td style={{color:"var(--amber)",fontFamily:"var(--mono)",fontSize:12}}>{n.num}</td>
+                          <td><span className={`tag tag-${n.tipo.toLowerCase().split(" ")[0]}`}>{n.tipo}</span></td>
+                          <td style={{fontFamily:"var(--mono)",fontSize:11}}>{n.fecha}</td>
+                          <td>{n.organo}</td>
+                          <td>{n.tema}</td>
+                          <td>
+                            <span style={{
+                              fontFamily:"var(--mono)",fontSize:10,
+                              color:n.estado==="Vigente"||n.estado==="Promulgada"?"#2ecc71":"var(--muted)",
+                              border:`1px solid ${n.estado==="Vigente"||n.estado==="Promulgada"?"#2ecc71":"var(--muted)"}`,
+                              padding:"2px 6px"
+                            }}>{n.estado}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div style={{marginTop:20,padding:16,background:"var(--bg2)",border:"1px solid var(--border)"}}>
+                    <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--amber)",marginBottom:8,letterSpacing:2}}>
+                      ANÁLISIS NORMATIVO IA
+                    </div>
+                    <div style={{color:"var(--muted)",fontSize:13}}>
+                      Seleccione una norma de la tabla y solicite análisis de impacto político y social con proyección de reacción de sectores bolivianos.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── TAB PRONÓSTICO ── */}
+              {tab === "pronostico" && (
+                <div className="forecast-container">
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                    <div>
+                      <div style={{fontFamily:"var(--display)",fontSize:22,color:"var(--amber2)"}}>
+                        Pronóstico del Clima Político
+                      </div>
+                      <div style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--muted)",marginTop:4}}>
+                        Basado en patrones históricos bolivianos 2000–2026 · IA predictiva
+                      </div>
+                    </div>
+                    <button
+                      className="btn-analyze"
+                      onClick={runForecast}
+                      disabled={forecastLoading}
+                    >
+                      {forecastLoading
+                        ? <><div className="ai-spinner" /> Analizando...</>
+                        : <><span>🔮</span> GENERAR PRONÓSTICO</>
+                      }
+                    </button>
+                  </div>
+
+                  {forecastLoading && (
+                    <div className="loading">
+                      <div className="ai-spinner" />
+                      Procesando patrones históricos bolivianos y tensiones actuales…
+                    </div>
+                  )}
+
+                  {forecasts.length > 0 && forecasts.map((f, i) => {
+                    const sevColor = {bajo:"#27ae60",medio:"#f39c12",alto:"#e67e22",critico:"#c0392b"}[f.severity] || "#aaa";
+                    return (
+                      <div key={i} className="forecast-card" style={{borderColor:i===0?sevColor:"var(--border)"}}>
+                        <div className="forecast-header">
+                          <div className="forecast-title">{f.title}</div>
+                          <div className="prob-badge" style={{color:sevColor,borderColor:sevColor}}>
+                            {f.probability}% probable
+                          </div>
+                        </div>
+                        <div className="forecast-body">{f.description}</div>
+                        {f.historical_ref && (
+                          <div style={{
+                            fontFamily:"var(--mono)",fontSize:11,color:"var(--muted)",
+                            borderLeft:"2px solid var(--border)",paddingLeft:10,marginBottom:10
+                          }}>
+                            📚 Precedente: {f.historical_ref}
+                          </div>
+                        )}
+                        <div className="forecast-tags">
+                          {(f.triggers||[]).map((t,j) => <span key={j} className="ftag">{t}</span>)}
+                        </div>
+                        <div className="timeline-indicator">
+                          <div className="tl-dot" style={{background:sevColor}} />
+                          <span>Horizonte temporal: {f.timeframe}</span>
+                          <span style={{marginLeft:"auto",color:sevColor,textTransform:"uppercase"}}>
+                            {f.severity}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {!forecastLoading && forecasts.length === 0 && (
+                    <div className="ai-panel" style={{textAlign:"center",padding:40}}>
+                      <div style={{fontSize:40,marginBottom:16}}>🔮</div>
+                      <div style={{fontFamily:"var(--display)",fontSize:18,color:"var(--amber2)",marginBottom:8}}>
+                        Motor Predictivo Listo
+                      </div>
+                      <div style={{fontFamily:"var(--mono)",fontSize:12,color:"var(--muted)",lineHeight:1.8}}>
+                        Haga clic en GENERAR PRONÓSTICO para que la IA analice las tensiones<br/>
+                        actuales y proyecte los escenarios políticos más probables para Bolivia<br/>
+                        basándose en el comportamiento histórico de los sectores sociales.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </main>
+
+          {/* ── PANEL DERECHO ── */}
+          <aside className="right-panel">
+            {/* Termómetro */}
+            <div className="rp-section">
+              <div className="section-title">Termómetro</div>
+              <div className="thermometer">
+                <div className="thermo-wrap">
+                  <div style={{position:"relative"}}>
+                    <div className="thermo-labels">
+                      <span>100</span><span>75</span><span>50</span><span>25</span><span>0</span>
+                    </div>
+                    <div className="thermo-track">
+                      <div className="thermo-fill" style={{
+                        height:`${climateScore}%`,
+                        background:`linear-gradient(0deg, #27ae60, #f39c12, ${climate.color})`
+                      }} />
+                    </div>
+                  </div>
+                </div>
+                <div className="thermo-reading" style={{color:climate.color}}>
+                  {Math.round(climateScore)}°
+                </div>
+                <div className="thermo-sublabel">{climate.label}</div>
+              </div>
+            </div>
+
+            {/* Tensión por sector */}
+            <div className="rp-section">
+              <div className="section-title">Sectores Sociales</div>
+              {sectors.map(s => (
+                <div key={s.name} className="sector-row">
+                  <div className="sector-name">{s.name}</div>
+                  <div className="sector-track">
+                    <div className="sector-fill" style={{
+                      width:`${s.val}%`,
+                      background:getTensionColor(s.val)
+                    }} />
+                  </div>
+                  <div className="sector-pct" style={{color:getTensionColor(s.val)}}>
+                    {Math.round(s.val)}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Alertas recientes */}
+            <div className="rp-section">
+              <div className="section-title">Alertas Activas</div>
+              {[
+                { icon:"🚨", text:"Bloqueo amenaza carretera La Paz–Oruro", time:"12 min" },
+                { icon:"⚠️", text:"Sesión urgente Asamblea Legislativa", time:"1h" },
+                { icon:"📢", text:"Cabildo convocado Santa Cruz — martes", time:"2h" },
+                { icon:"🔴", text:"Tipo de cambio: presión alcista",         time:"3h" },
+              ].map((a,i) => (
+                <div key={i} style={{
+                  display:"flex",gap:8,alignItems:"flex-start",
+                  marginBottom:10,paddingBottom:10,
+                  borderBottom:"1px solid var(--border)"
+                }}>
+                  <span style={{fontSize:14,marginTop:2}}>{a.icon}</span>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:12,color:"var(--text)",lineHeight:1.4}}>{a.text}</div>
+                    <div style={{fontFamily:"var(--mono)",fontSize:10,color:"var(--muted)",marginTop:3}}>
+                      hace {a.time}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Mapa de riesgo regional */}
+            <div className="rp-section">
+              <div className="section-title">Riesgo Regional</div>
+              {[
+                { dep:"La Paz",         risk:78 },
+                { dep:"Santa Cruz",     risk:85 },
+                { dep:"Cochabamba",     risk:62 },
+                { dep:"Oruro",          risk:55 },
+                { dep:"Potosí",         risk:70 },
+                { dep:"Beni",           risk:30 },
+                { dep:"Pando",          risk:22 },
+                { dep:"Tarija",         risk:45 },
+                { dep:"Chuquisaca",     risk:40 },
+              ].map(r => (
+                <div key={r.dep} className="sector-row">
+                  <div className="sector-name">{r.dep}</div>
+                  <div className="sector-track">
+                    <div className="sector-fill" style={{
+                      width:`${r.risk}%`,
+                      background:getTensionColor(r.risk)
+                    }} />
+                  </div>
+                  <div className="sector-pct" style={{color:getTensionColor(r.risk)}}>
+                    {r.risk}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </aside>
+        </div>
+
+        {/* ── TICKER ── */}
+        <div className="ticker">
+          <div className="ticker-inner">
+            {TICKER_ITEMS.map((item, i) => (
+              <span key={i} className="ticker-item">
+                <span>⬥</span>{item}
+              </span>
+            ))}
+            {TICKER_ITEMS.map((item, i) => (
+              <span key={`r${i}`} className="ticker-item">
+                <span>⬥</span>{item}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
