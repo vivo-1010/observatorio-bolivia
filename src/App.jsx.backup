@@ -488,10 +488,21 @@ export default function BoliviaPolitica() {
   }, []);
 
   // ── Llamada a Claude API ──
-  const runAnalysis = useCallback(async (newsItem) => {
-    setAnalysisText("");
-    setAnalysisLoading(true);
-    analysisDoneRef.current = false;
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY,
+    "anthropic-version": "2023-06-01",
+    "anthropic-dangerous-direct-browser-access": "true",
+  },
+  body: JSON.stringify({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 1000,
+    stream: true,
+    messages: [{ role: "user", content: prompt }]
+  })
+});
 
     const prompt = `Eres un analista político especializado en Bolivia con 20 años de experiencia. Analiza esta noticia y proporciona:
 
@@ -510,16 +521,16 @@ Sé específico sobre Bolivia, sus organizaciones (COB, CSUTCB, comités cívico
 
     try {
       const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          stream: true,
-          messages: [{ role: "user", content: prompt }]
-        })
-      });
-
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY,
+    "anthropic-version": "2023-06-01",
+    "anthropic-dangerous-direct-browser-access": "true",
+  },
+  body: JSON.stringify({
+  })
+});
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -550,9 +561,20 @@ Sé específico sobre Bolivia, sus organizaciones (COB, CSUTCB, comités cívico
     analysisDoneRef.current = true;
   }, []);
 
-  const runForecast = useCallback(async () => {
-    setForecasts([]);
-    setForecastLoading(true);
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY,
+    "anthropic-version": "2023-06-01",
+    "anthropic-dangerous-direct-browser-access": "true",
+  },
+  body: JSON.stringify({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 1000,
+    messages: [{ role: "user", content: prompt }]
+  })
+});
 
     const prompt = `Eres el principal analista de riesgo político de Bolivia. Basándote en el panorama actual boliviano de marzo 2026:
 
@@ -579,14 +601,16 @@ Genera exactamente 4 escenarios ordenados por probabilidad. Usa patrones histór
 
     try {
       const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          messages: [{ role: "user", content: prompt }]
-        })
-      });
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY,
+    "anthropic-version": "2023-06-01",
+    "anthropic-dangerous-direct-browser-access": "true",
+  },
+  body: JSON.stringify({
+  })
+});
       const data = await response.json();
       const raw = data.content?.map(c => c.text || "").join("") || "";
       const clean = raw.replace(/```json|```/g, "").trim();
